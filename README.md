@@ -14,4 +14,4 @@ The final setup is as simple as possible: you only have to boot your Raspberry P
 
 The weak spots are a) your Raspberry Pi is disconnected from power and b) your wifi is disconnected from power.
 
-The description how to install everything can be found in the Readme_setup.txt.
+The description how to install everything can be found in the "How_to.txt".
