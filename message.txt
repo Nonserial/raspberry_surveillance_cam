@@ -1,0 +1,2 @@
+This is an automatically created email-alert. Either a motion has been detected or a snapshot was created.
+See attachment!

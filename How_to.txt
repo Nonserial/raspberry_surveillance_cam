@@ -1,0 +1,242 @@
+## What you need:
+	-Raspberry Pi Model B
+	-Crossover LAN Cable
+	-4 GB SD-Card
+	-EDIMAX Usb-wlan-Adapter
+	-Micro-USB-Power-Adapter
+	-Creative LIVE! Cam Sync HD (Hardware ID: 041e:4095)
+
+## download raspbian jessie-lite:
+https://www.raspberrypi.org/downloads/raspbian/
+
+## copy it to 4 GB sd-card
+$ dd if=raspbian-jessie-lite.img of=/dev/mmcblk
+
+## open wireshark capture on eth
+## plug in power of raspberry
+## find out ip of raspberry in wireshrak capture (mine was 169.254.162.95)
+## change your ethernet network to raspberry subnet
+## connect to raspberry via ssh:
+$ ssh pi@169.254.162.95
+
+
+## login with password "raspberry"
+
+## change password:
+$ passwd
+
+
+## renew ssh-key:
+$ sudo rm /etc/ssh/ssh_host_*
+$ sudo dpkg-reconfigure openssh-server
+$ sudo service ssh restart
+
+
+## for static ip, add following lines to file:
+$ sudo nano /etc/dhcpcd.conf
+
+## manual configure static ip for eth0
+interface eth0
+static ip_address=10.42.0.12/24
+static routers=10.42.0.1
+static domain_name_servers=10.42.0.1
+
+--> save and quit (Ctrl-O, Ctrl-X)
+
+
+## reboot:
+$ sudo reboot
+
+
+## login with new credentials:
+$ ssh pi@10.42.0.12
+
+
+## to activate line-numbering in nano, write following line to file:
+$ nano .nanorc
+
+set const
+
+--> save and quit
+
+$ sudo nano .nanorc
+
+set const
+
+--> save and quit
+
+
+## add wlan-networks:
+$ sudo nano /etc/wpa_supplicant/wpa_supplicant.conf                                                       
+
+# Allow users in the 'wheel' group to control wpa_supplicant
+ctrl_interface=DIR=/var/run/wpa_supplicant
+
+# Make this file writable for wpa_gui / wpa_cli
+update_config=1
+ap_scan=1
+
+
+network={
+        ssid="Your-Wireless-here"
+        psk="Your-PSK-here"
+}
+
+--> save and quit
+
+$ sudo systemctl enable wpa_supplicant.service
+
+$ sudo ifdown wlan0
+$ sudo ifup wlan0
+
+
+## perform update:
+$ sudo apt-get update && sudo apt-get dist-upgrade
+
+
+## install some programs:
+$ sudo apt-get install ssmtp mailutils mpack byobu motion rpi-update git
+
+
+## configure raspberry:
+$ sudo raspi-config
+--> expand filesystem
+--> overscaen
+--> enable ssh
+--> update this tool
+
+
+## perform update of raspberry:
+$ sudo rpi-update
+$ reboot
+
+
+## edit email-config; this is the mail, alerts are being sent from:
+$ sudo nano /etc/ssmtp/ssmtp.conf
+
+mailhub=your.smtp.server:587
+AuthUser=your@email.com
+AuthPass=Emailpassword
+FromLineOverride=YES
+UseSTARTTLS=YES
+
+--> save and quit
+
+## if you use Gmail, you need to allow access from unsecure apps in Gmail-browser
+
+
+$ sudo nano /etc/ssmtp/revaliases
+
+pi:your@email.com:your.smtp.server:587
+
+--> save and quit
+
+
+## test, if sending mail works:
+$ mail -s "test" target@mail.com
+
+--> quit with Ctrl-D
+
+
+## configure motion:
+$ sudo nano /etc/motion/motion.conf
+
+line 11: daemon on
+line 68: v4l2_palette 8 ###(Creative live-cam supports mjepg)
+line 90: width 1280
+line 93: height 760
+line 97: framerate 30
+line 132: auto_brightness on
+line 212: minimum_motion_frames 2
+line 234: max_movie_time 300
+line 250: output_pictures best
+line 256: quality 95 
+line 341: 32400
+line 360: locate_motion_mode on 
+line 368: locate_motion_style redbox
+line 418: target_dir /tmp/motion
+line 464: stream_port 0
+line 500: webcontrol_port 0 
+line 605: on_event_start /home/pi/Desktop/Motion/eventstart.sh
+line 609: on_event_end /home/pi/Desktop/Motion/eventend.sh
+line 613: on_picture_save /home/pi/Desktop/Motion/sendmail-foto.sh %f
+line 628: on_movie_end /home/pi/Desktop/Motion/sendmail-video.sh %f
+
+--> save and quit
+
+
+## start motion on startup:
+$ sudo nano /etc/default/motion
+
+start_motion_daemon=yes
+
+--> save and quit
+
+
+## download scripts from github:
+$ mkdir Desktop
+$ cd Desktop
+$ git clone https://github.com/Nonserial/rpi_intel_surveillancecam Motion
+$ cd Motion
+
+
+## to setup GPG-encryption get public key for target@mail.com:
+$ sudo gpg --keyserver pgp.mit.edu --search-keys target@mail.com
+
+--> enter 1 and confirm to add key
+
+## Trust Key:
+$ sudo gpg --edit target@mail.com
+$ >gpg: trust
+$ >gpg: 5
+$ >gpg: y
+$ >gpg: quit 
+
+## change scripts:
+S nano sendmail-foto.sh
+
+# encrypt foto:
+sudo gpg --yes --encrypt --recipient target@mail.com $1
+mpack -s "Foto detected" -d /home/pi/Desktop/Motion/message.txt $1.gpg target@mail.com
+# without encryption
+#mpack -s "Foto detected" -d /home/pi/Desktop/Motion/message.txt $1 target@mail.com
+
+--> save and quit
+
+
+$ nano sendmail-video.sh
+
+# encrypt video:
+sudo gpg --yes --encrypt --recipient target@mail.com $1
+mpack -s "Video detected" -d /home/pi/Desktop/Motion/message.txt $1.gpg target@mail.com
+# without encryption:
+#mpack -s "Video detected" -d /home/pi/Desktop/Motion/message.txt $1 target@mail.com
+
+--> save and quit
+
+
+## make scripts executable:
+$ sudo chmod +x *.sh
+
+
+## allow user „motion“ to execute sudo without password so our scripts can be started:
+# check current permissions
+$ id motion
+$ sudo usermod -a -G sudo motion
+
+# check if permissions have changed
+$ id motion
+
+$ sudo visudo
+
+# add at last line:
+motion ALL=(ALL) NOPASSWD: ALL
+
+--> save and quit
+
+
+## the setup is now ready to test.
+## motion will start, when raspberry starts.
+## internet-connection will be automatically established, when event is detected.
+## email will be sent with foto and video of event.
+## after event has ended, raspberry will disconnect internet-connection and wait for new event.
